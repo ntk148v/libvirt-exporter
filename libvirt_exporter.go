@@ -22,7 +22,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 
 	kingpin "github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log"
@@ -34,14 +37,14 @@ import (
 	"github.com/prometheus/common/version"
 	"github.com/prometheus/exporter-toolkit/web"
 	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
+	"github.com/prometheus/procfs"
 	"libvirt.org/go/libvirt"
 
-	"github.com/ntk148v/libvirt-exporter/libvirtSchema"
+	"github.com/ntk148v/libvirt-exporter/pkg/libvirtSchema"
+	"github.com/ntk148v/libvirt-exporter/pkg/utils"
 )
 
 var (
-	Version = ""
-
 	libvirtUpDesc = prometheus.NewDesc(
 		prometheus.BuildFQName("libvirt", "", "up"),
 		"Whether scraping libvirt's metrics was successful.",
@@ -389,6 +392,12 @@ var (
 		nil)
 
 	errorsMap map[string]struct{}
+
+	// The list of host processes
+	processes []int
+
+	// The path of the proc filesystem.
+	procFSPath = kingpin.Flag("path.procfs", "procfs mountpoint.").Default(procfs.DefaultMountPoint).String()
 )
 
 // WriteErrorOnce writes message to stdout only once
@@ -402,9 +411,58 @@ func WriteErrorOnce(err string, name string, logger log.Logger) {
 	}
 }
 
+// GetDomainPid returns the VM's Pid by iterating over process list
+func GetDomainPid(domainName string) (pid int) {
+	// lookup PID
+	for _, process := range processes {
+		cmdline := utils.GetCmdLine(*procFSPath, process)
+		if cmdline != "" && strings.Contains(cmdline, domainName) {
+			// fmt.Printf("Found PID %d for instance %s (cmdline: %s)", process, name, cmdline)
+			pid = process
+			break
+		}
+	}
+
+	return
+}
+
+// GetDomainVcpuPids returns the list of vcpu pid.
+// It runs the following command:
+//
+// virsh -c qemu:///system qemu-monitor-command --hmp <domain-name> info cpus
+//   - CPU #0: thread_id=151260
+//     CPU #1: thread_id=151261
+//
+// Then get the thread ids.
+func GetDomainVcpuPids(domain *libvirt.Domain) (vCPUPids []int, err error) {
+	// NOTE(kiennt): For the libvirt version < v7.2.0, we have to self-calculate CPU steal
+	// Get the thread ids or VCPU's pid.
+	vCPUThreads, err := domain.QemuMonitorCommand("info cpus", libvirt.DOMAIN_QEMU_MONITOR_COMMAND_HMP)
+	if err != nil {
+		return vCPUPids, err
+	}
+
+	regThreadID := regexp.MustCompile(`thread_id=([0-9]*)\s`)
+	threadIDsRaw := regThreadID.FindAllStringSubmatch(vCPUThreads, -1)
+	vCPUPids = make([]int, len(threadIDsRaw))
+	for i, thread := range threadIDsRaw {
+		threadID, _ := strconv.Atoi(thread[1])
+		vCPUPids[i] = threadID
+	}
+
+	return
+}
+
 // CollectDomain extracts Prometheus metrics from a libvirt domain.
 func CollectDomain(ch chan<- prometheus.Metric, stat libvirt.DomainStats, logger log.Logger) error {
 	domainName, err := stat.Domain.GetName()
+	if err != nil {
+		return err
+	}
+
+	// Get Domain PID and its Vcpu Pids
+	domainPid := GetDomainPid(domainName)
+	domainVcpuPids, err := GetDomainVcpuPids(stat.Domain)
 	if err != nil {
 		return err
 	}
@@ -499,6 +557,7 @@ func CollectDomain(ch chan<- prometheus.Metric, stat libvirt.DomainStats, logger
 				domainName,
 				strconv.FormatInt(int64(vcpu.Number), 10))
 		}
+
 		/* There's no Wait in GetVcpus()
 		 * But there's no cpu number in libvirt.DomainStats
 		 * Time and State are present in both structs
@@ -518,6 +577,20 @@ func CollectDomain(ch chan<- prometheus.Metric, stat libvirt.DomainStats, logger
 					libvirtDomainVcpuDelayDesc,
 					prometheus.CounterValue,
 					float64(vcpu.Delay)/1e9,
+					domainName,
+					strconv.FormatInt(int64(cpuNum), 10))
+			} else {
+				// If there are no vcpu delay measurement, we calculate it ourselves.
+				vcpuPid := domainVcpuPids[cpuNum]
+				procFSSchedStat, err := utils.GetProcPIDSchedStat(filepath.Join(*procFSPath, strconv.Itoa(domainPid), "task"), vcpuPid)
+				if err != nil {
+					_ = level.Error(logger).Log("err", "unable to collect vcpu delay metric", "msg", err)
+					continue
+				}
+				ch <- prometheus.MustNewConstMetric(
+					libvirtDomainVcpuDelayDesc,
+					prometheus.CounterValue,
+					float64(procFSSchedStat.Runqueue)/1e9,
 					domainName,
 					strconv.FormatInt(int64(cpuNum), 10))
 			}
@@ -1032,6 +1105,9 @@ func CollectFromLibvirt(ch chan<- prometheus.Metric, uri string, logger log.Logg
 		return err
 	}
 	libraryVersion := fmt.Sprintf("%d.%d.%d", libraryVersionNum/1000000%1000, libraryVersionNum/1000%1000, libraryVersionNum%1000)
+
+	// Get all host processes in order to get the VM Pid.
+	processes = utils.GetProcessList(*procFSPath)
 
 	ch <- prometheus.MustNewConstMetric(
 		libvirtVersionsInfoDesc,
