@@ -20,12 +20,12 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
 
 	kingpin "github.com/alecthomas/kingpin/v2"
+	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -395,15 +395,15 @@ var (
 // for the error
 // "err" - an error message
 // "name" - name of an error, to count it
-func WriteErrorOnce(err string, name string) {
+func WriteErrorOnce(err string, name string, logger log.Logger) {
 	if _, ok := errorsMap[name]; !ok {
-		log.Printf("%s", err)
+		_ = level.Error(logger).Log("err", err)
 		errorsMap[name] = struct{}{}
 	}
 }
 
 // CollectDomain extracts Prometheus metrics from a libvirt domain.
-func CollectDomain(ch chan<- prometheus.Metric, stat libvirt.DomainStats) error {
+func CollectDomain(ch chan<- prometheus.Metric, stat libvirt.DomainStats, logger log.Logger) error {
 	domainName, err := stat.Domain.GetName()
 	if err != nil {
 		return err
@@ -661,9 +661,9 @@ func CollectDomain(ch chan<- prometheus.Metric, stat libvirt.DomainStats) error 
 				switch lverr.Code {
 				case libvirt.ERR_OPERATION_INVALID:
 					// This should be one-shot error
-					log.Printf("Invalid operation GetBlockIoTune: %s", err.Error())
+					_ = level.Error(logger).Log("err", "invalid operation GetBlockIoTune", "msg", err)
 				case libvirt.ERR_OPERATION_UNSUPPORTED:
-					WriteErrorOnce("Unsupported operation GetBlockIoTune: "+err.Error(), "blkiotune_unsupported")
+					WriteErrorOnce("Unsupported operation GetBlockIoTune: "+err.Error(), "blkiotune_unsupported", logger)
 				default:
 					return err
 				}
@@ -1008,7 +1008,7 @@ func CollectStoragePool(ch chan<- prometheus.Metric, pool libvirt.StoragePool) e
 
 // CollectFromLibvirt obtains Prometheus metrics from all domains in a
 // libvirt setup.
-func CollectFromLibvirt(ch chan<- prometheus.Metric, uri string) error {
+func CollectFromLibvirt(ch chan<- prometheus.Metric, uri string, logger log.Logger) error {
 	conn, err := libvirt.NewConnect(uri)
 	if err != nil {
 		return err
@@ -1055,9 +1055,9 @@ func CollectFromLibvirt(ch chan<- prometheus.Metric, uri string) error {
 		return err
 	}
 	for _, stat := range stats {
-		err = CollectDomain(ch, stat)
+		err = CollectDomain(ch, stat, logger)
 		if err != nil {
-			log.Printf("Failed to scrape metrics: %s", err)
+			return err
 		}
 	}
 
@@ -1103,13 +1103,15 @@ func memoryStatCollect(memorystat *[]libvirt.DomainMemoryStat) libvirtSchema.Vir
 
 // LibvirtExporter implements a Prometheus exporter for libvirt state.
 type LibvirtExporter struct {
-	uri string
+	uri    string
+	logger log.Logger
 }
 
 // NewLibvirtExporter creates a new Prometheus exporter for libvirt.
-func NewLibvirtExporter(uri string) (*LibvirtExporter, error) {
+func NewLibvirtExporter(uri string, logger log.Logger) (*LibvirtExporter, error) {
 	return &LibvirtExporter{
-		uri: uri,
+		uri:    uri,
+		logger: logger,
 	}, nil
 }
 
@@ -1177,14 +1179,14 @@ func (e *LibvirtExporter) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect scrapes Prometheus metrics from libvirt.
 func (e *LibvirtExporter) Collect(ch chan<- prometheus.Metric) {
-	err := CollectFromLibvirt(ch, e.uri)
+	err := CollectFromLibvirt(ch, e.uri, e.logger)
 	if err == nil {
 		ch <- prometheus.MustNewConstMetric(
 			libvirtUpDesc,
 			prometheus.GaugeValue,
 			1.0)
 	} else {
-		log.Printf("Failed to scrape metrics: %s", err)
+		_ = level.Error(e.logger).Log("err", "failed to scrape metrics", "uri", e.uri, "msg", err)
 		ch <- prometheus.MustNewConstMetric(
 			libvirtUpDesc,
 			prometheus.GaugeValue,
@@ -1232,7 +1234,7 @@ func main() {
 
 	errorsMap = make(map[string]struct{})
 
-	exporter, err := NewLibvirtExporter(*libvirtURI)
+	exporter, err := NewLibvirtExporter(*libvirtURI, logger)
 	if err != nil {
 		panic(err)
 	}
