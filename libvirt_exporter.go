@@ -25,11 +25,12 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/Tinkoff/libvirt-exporter/libvirtSchema"
+	kingpin "github.com/alecthomas/kingpin/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"gopkg.in/alecthomas/kingpin.v2"
 	"libvirt.org/go/libvirt"
+
+	"github.com/ntk148v/libvirt-exporter/libvirtSchema"
 )
 
 var (

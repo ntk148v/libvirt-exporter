@@ -27,9 +27,11 @@
 package libvirt
 
 /*
-#cgo pkg-config: libvirt
+#cgo !libvirt_dlopen pkg-config: libvirt
+#cgo libvirt_dlopen LDFLAGS: -ldl
+#cgo libvirt_dlopen CFLAGS: -DLIBVIRT_DLOPEN
 #include <stdlib.h>
-#include "storage_pool_wrapper.h"
+#include "libvirt_generated.h"
 */
 import "C"
 
@@ -65,6 +67,12 @@ const (
 	STORAGE_POOL_CREATE_WITH_BUILD              = StoragePoolCreateFlags(C.VIR_STORAGE_POOL_CREATE_WITH_BUILD)
 	STORAGE_POOL_CREATE_WITH_BUILD_OVERWRITE    = StoragePoolCreateFlags(C.VIR_STORAGE_POOL_CREATE_WITH_BUILD_OVERWRITE)
 	STORAGE_POOL_CREATE_WITH_BUILD_NO_OVERWRITE = StoragePoolCreateFlags(C.VIR_STORAGE_POOL_CREATE_WITH_BUILD_NO_OVERWRITE)
+)
+
+type StoragePoolDefineFlags uint
+
+const (
+	STORAGE_POOL_DEFINE_VALIDATE = StoragePoolDefineFlags(C.VIR_STORAGE_POOL_DEFINE_VALIDATE)
 )
 
 type StoragePoolDeleteFlags uint

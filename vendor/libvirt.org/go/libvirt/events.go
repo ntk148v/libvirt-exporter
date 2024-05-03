@@ -27,9 +27,11 @@
 package libvirt
 
 /*
-#cgo pkg-config: libvirt
+#cgo !libvirt_dlopen pkg-config: libvirt
+#cgo libvirt_dlopen LDFLAGS: -ldl
+#cgo libvirt_dlopen CFLAGS: -DLIBVIRT_DLOPEN
 #include <stdint.h>
-#include "events_wrapper.h"
+#include "events_helper.h"
 */
 import "C"
 
@@ -43,9 +45,14 @@ const (
 )
 
 // See also https://libvirt.org/html/libvirt-libvirt-event.html#virEventRegisterDefaultImpl
+//
+// Note that registering an event loop implementation must be
+// done before creating any Connect object instance
 func EventRegisterDefaultImpl() error {
 	var err C.virError
-	C.virInitialize()
+	if C.virInitializeWrapper(&err) < 0 {
+		return makeError(&err)
+	}
 	if i := int(C.virEventRegisterDefaultImplWrapper(&err)); i != 0 {
 		return makeError(&err)
 	}
@@ -80,7 +87,7 @@ func EventAddHandle(fd int, events EventHandleType, callback EventHandleCallback
 	callbackID := registerCallbackId(callback)
 
 	var err C.virError
-	ret := C.virEventAddHandleWrapper((C.int)(fd), (C.int)(events), (C.int)(callbackID), &err)
+	ret := C.virEventAddHandleHelper((C.int)(fd), (C.int)(events), (C.int)(callbackID), &err)
 	if ret == -1 {
 		return 0, makeError(&err)
 	}
@@ -90,7 +97,7 @@ func EventAddHandle(fd int, events EventHandleType, callback EventHandleCallback
 
 // See also https://libvirt.org/html/libvirt-libvirt-event.html#virEventUpdateHandle
 func EventUpdateHandle(watch int, events EventHandleType) {
-	C.virEventUpdateHandle((C.int)(watch), (C.int)(events))
+	C.virEventUpdateHandleWrapper((C.int)(watch), (C.int)(events))
 }
 
 // See also https://libvirt.org/html/libvirt-libvirt-event.html#virEventRemoveHandle
@@ -123,7 +130,7 @@ func EventAddTimeout(freq int, callback EventTimeoutCallback) (int, error) {
 	callbackID := registerCallbackId(callback)
 
 	var err C.virError
-	ret := C.virEventAddTimeoutWrapper((C.int)(freq), (C.int)(callbackID), &err)
+	ret := C.virEventAddTimeoutHelper((C.int)(freq), (C.int)(callbackID), &err)
 	if ret == -1 {
 		return 0, makeError(&err)
 	}
@@ -133,7 +140,7 @@ func EventAddTimeout(freq int, callback EventTimeoutCallback) (int, error) {
 
 // See also https://libvirt.org/html/libvirt-libvirt-event.html#virEventUpdateTimeout
 func EventUpdateTimeout(timer int, freq int) {
-	C.virEventUpdateTimeout((C.int)(timer), (C.int)(freq))
+	C.virEventUpdateTimeoutWrapper((C.int)(timer), (C.int)(freq))
 }
 
 // See also https://libvirt.org/html/libvirt-libvirt-event.html#virEventRemoveTimeout
@@ -187,10 +194,17 @@ type EventLoop interface {
 var eventLoopImpl EventLoop
 
 // See also https://libvirt.org/html/libvirt-libvirt-event.html#virEventRegisterImpl
-func EventRegisterImpl(impl EventLoop) {
+//
+// Note that registering an event loop implementation must be
+// done before creating any Connect object instance
+func EventRegisterImpl(impl EventLoop) error {
+	var err C.virError
 	eventLoopImpl = impl
-	C.virInitialize()
-	C.virEventRegisterImplWrapper()
+	if C.virInitializeWrapper(&err) < 0 {
+		return makeError(&err)
+	}
+	C.virEventRegisterImplHelper()
+	return nil
 }
 
 //export eventAddHandleFunc

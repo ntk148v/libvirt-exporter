@@ -27,9 +27,11 @@
 package libvirt
 
 /*
-#cgo pkg-config: libvirt
+#cgo !libvirt_dlopen pkg-config: libvirt
+#cgo libvirt_dlopen LDFLAGS: -ldl
+#cgo libvirt_dlopen CFLAGS: -DLIBVIRT_DLOPEN
 #include <stdlib.h>
-#include "secret_wrapper.h"
+#include "libvirt_generated.h"
 */
 import "C"
 
@@ -46,6 +48,12 @@ const (
 	SECRET_USAGE_TYPE_ISCSI  = SecretUsageType(C.VIR_SECRET_USAGE_TYPE_ISCSI)
 	SECRET_USAGE_TYPE_TLS    = SecretUsageType(C.VIR_SECRET_USAGE_TYPE_TLS)
 	SECRET_USAGE_TYPE_VTPM   = SecretUsageType(C.VIR_SECRET_USAGE_TYPE_VTPM)
+)
+
+type SecretDefineFlags uint
+
+const (
+	SECRET_DEFINE_VALIDATE = SecretDefineFlags(C.VIR_SECRET_DEFINE_VALIDATE)
 )
 
 type SecretEventLifecycleType int

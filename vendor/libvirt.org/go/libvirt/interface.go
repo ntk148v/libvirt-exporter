@@ -27,9 +27,11 @@
 package libvirt
 
 /*
-#cgo pkg-config: libvirt
+#cgo !libvirt_dlopen pkg-config: libvirt
+#cgo libvirt_dlopen LDFLAGS: -ldl
+#cgo libvirt_dlopen CFLAGS: -DLIBVIRT_DLOPEN
 #include <stdlib.h>
-#include "interface_wrapper.h"
+#include "libvirt_generated.h"
 */
 import "C"
 
@@ -41,6 +43,12 @@ type InterfaceXMLFlags uint
 
 const (
 	INTERFACE_XML_INACTIVE = InterfaceXMLFlags(C.VIR_INTERFACE_XML_INACTIVE)
+)
+
+type InterfaceDefineFlags uint
+
+const (
+	INTERFACE_DEFINE_VALIDATE = InterfaceDefineFlags(C.VIR_INTERFACE_DEFINE_VALIDATE)
 )
 
 type Interface struct {

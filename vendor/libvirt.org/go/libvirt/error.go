@@ -27,10 +27,10 @@
 package libvirt
 
 /*
-#cgo pkg-config: libvirt
-#include <libvirt/libvirt.h>
-#include <libvirt/virterror.h>
-#include "error_compat.h"
+#cgo !libvirt_dlopen pkg-config: libvirt
+#cgo libvirt_dlopen LDFLAGS: -ldl
+#cgo libvirt_dlopen CFLAGS: -DLIBVIRT_DLOPEN
+#include "libvirt_generated.h"
 
 void ignoreErrorFunc(void *userData, virErrorPtr error) {
      // no-op
@@ -43,8 +43,7 @@ import (
 )
 
 func init() {
-	C.virSetErrorFunc(nil, (C.virErrorFunc)(C.ignoreErrorFunc))
-	C.virInitialize()
+	C.virSetErrorFuncWrapper(nil, (C.virErrorFunc)(C.ignoreErrorFunc))
 }
 
 type ErrorLevel int
@@ -393,6 +392,9 @@ const (
 
 	// more than one matching domain found
 	ERR_MULTIPLE_DOMAINS = ErrorNumber(C.VIR_ERR_MULTIPLE_DOMAINS)
+
+	// The metadata is not present
+	ERR_NO_NETWORK_METADATA = ErrorNumber(C.VIR_ERR_NO_NETWORK_METADATA)
 )
 
 type ErrorDomain int
@@ -645,15 +647,6 @@ func makeError(err *C.virError) Error {
 		Message: C.GoString(err.message),
 		Level:   ErrorLevel(err.level),
 	}
-	C.virResetError(err)
+	C.virResetErrorWrapper(err)
 	return ret
-}
-
-func makeNotImplementedError(apiname string) Error {
-	return Error{
-		Code:    ERR_NO_SUPPORT,
-		Domain:  FROM_NONE,
-		Message: fmt.Sprintf("Function '%s' not available in the libvirt library used during Go build", apiname),
-		Level:   ERR_ERROR,
-	}
 }

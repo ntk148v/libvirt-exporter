@@ -27,14 +27,22 @@
 package libvirt
 
 /*
-#cgo pkg-config: libvirt
+#cgo !libvirt_dlopen pkg-config: libvirt
+#cgo libvirt_dlopen LDFLAGS: -ldl
+#cgo libvirt_dlopen CFLAGS: -DLIBVIRT_DLOPEN
 #include <stdlib.h>
-#include "nwfilter_wrapper.h"
+#include "libvirt_generated.h"
 */
 import "C"
 
 import (
 	"unsafe"
+)
+
+type NWFilterDefineFlags uint
+
+const (
+	NWFILTER_DEFINE_VALIDATE = NWFilterDefineFlags(C.VIR_NWFILTER_DEFINE_VALIDATE)
 )
 
 type NWFilter struct {
