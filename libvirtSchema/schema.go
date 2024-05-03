@@ -1,3 +1,4 @@
+// Copyright 2024 Kien Nguyen Tuan
 // Copyright 2017 Kumina, https://kumina.nl/
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Project forked from https://github.com/Tinkoff/libvirt-exporter
+
 package libvirtSchema
 
 type Domain struct {
-	Devices Devices `xml:"devices"`
+	Devices  Devices  `xml:"devices"`
 	Metadata Metadata `xml:"metadata"`
 }
 
@@ -24,9 +27,9 @@ type Metadata struct {
 
 type Instance struct {
 	NovaFlavor Flavor `xml:"flavor"`
-	NovaOwner Owner `xml:"owner"`
-	NovaName string `xml:"name"`
-	NovaRoot Root `xml:"root"`
+	NovaOwner  Owner  `xml:"owner"`
+	NovaName   string `xml:"name"`
+	NovaRoot   Root   `xml:"root"`
 }
 
 type Flavor struct {
@@ -34,7 +37,7 @@ type Flavor struct {
 }
 
 type Owner struct {
-	NovaUser User `xml:"user"`
+	NovaUser    User    `xml:"user"`
 	NovaProject Project `xml:"project"`
 }
 
@@ -60,7 +63,7 @@ type Devices struct {
 
 type Disk struct {
 	Device   string     `xml:"device,attr"`
-	Driver   DiskDriver     `xml:"driver"`
+	Driver   DiskDriver `xml:"driver"`
 	Source   DiskSource `xml:"source"`
 	Target   DiskTarget `xml:"target"`
 	DiskType string     `xml:"type,attr"`
@@ -80,7 +83,7 @@ type DiskSource struct {
 
 type DiskTarget struct {
 	Device string `xml:"dev,attr"`
-	Bus string `xml:"bus,attr"`
+	Bus    string `xml:"bus,attr"`
 }
 
 type Interface struct {
@@ -107,10 +110,10 @@ type InterfaceTarget struct {
 type VirDomainMemoryStats struct {
 	MajorFault    uint64
 	MinorFault    uint64
-	Unused         uint64
-	Available      uint64
+	Unused        uint64
+	Available     uint64
 	ActualBalloon uint64
-	Rss            uint64
-	Usable         uint64
+	Rss           uint64
+	Usable        uint64
 	DiskCaches    uint64
 }

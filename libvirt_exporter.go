@@ -1,3 +1,4 @@
+// Copyright 2024 Kien Nguyen Tuan
 // Copyright 2021 Aleksei Zakharov, https://alexzzz.ru/
 // Copyright 2017 Kumina, https://kumina.nl/
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Project forked from https://github.com/kumina/libvirt_exporter
-// And then forked from https://github.com/rumanzo/libvirt_exporter_improved
+// Project forked from https://github.com/Tinkoff/libvirt-exporter
 
 package main
 
