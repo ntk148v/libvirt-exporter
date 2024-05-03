@@ -26,8 +26,14 @@ import (
 	"strconv"
 
 	kingpin "github.com/alecthomas/kingpin/v2"
+	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/promlog/flag"
+	"github.com/prometheus/common/version"
+	"github.com/prometheus/exporter-toolkit/web"
+	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
 	"libvirt.org/go/libvirt"
 
 	"github.com/ntk148v/libvirt-exporter/libvirtSchema"
@@ -1186,33 +1192,77 @@ func (e *LibvirtExporter) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
+// ConnectURI defines a type for driver URIs for libvirt
+// the defined constants are *not* exhaustive as there are also options
+// e.g. to connect remote via SSH
+type ConnectURI string
+
+// See also https://libvirt.org/html/libvirt-libvirt-host.html#virConnectOpen
+const (
+	// QEMUSystem connects to a QEMU system mode daemon
+	QEMUSystem ConnectURI = "qemu:///system"
+	// QEMUSession connects to a QEMU session mode daemon (unprivileged)
+	QEMUSession ConnectURI = "qemu:///session"
+	// XenSystem connects to a Xen system mode daemon
+	XenSystem ConnectURI = "xen:///system"
+	//TestDefault connect to default mock driver
+	TestDefault ConnectURI = "test:///default"
+)
+
 func main() {
-	var (
-		app           = kingpin.New("libvirt_exporter", "Prometheus metrics exporter for libvirt")
-		listenAddress = app.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9177").String()
-		metricsPath   = app.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
-		libvirtURI    = app.Flag("libvirt.uri", "Libvirt URI from which to extract metrics.").Default("qemu:///system").String()
-	)
-	app.Version(Version)
-	kingpin.MustParse(app.Parse(os.Args[1:]))
+	var libvirtURI = kingpin.Flag("libvirt.uri",
+		fmt.Sprintf("Libvirt URI to extract metrics, available value: %s (default), %s, %s and %s ",
+			QEMUSystem, QEMUSession, XenSystem, TestDefault),
+	).Default(string(QEMUSystem)).String()
+
+	metricsPath := kingpin.Flag(
+		"web.telemetry-path", "Path under which to expose metrics",
+	).Default("/metrics").String()
+	toolkitFlags := webflag.AddFlags(kingpin.CommandLine, ":9177")
+
+	promlogConfig := &promlog.Config{}
+	flag.AddFlags(kingpin.CommandLine, promlogConfig)
+	kingpin.Version(version.Print("libvirt_exporter"))
+	kingpin.HelpFlag.Short('h')
+	kingpin.Parse()
+	logger := promlog.New(promlogConfig)
+
+	_ = level.Info(logger).Log("msg", "Starting libvirt_exporter", "version", version.Info())
+	_ = level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
+
 	errorsMap = make(map[string]struct{})
 
 	exporter, err := NewLibvirtExporter(*libvirtURI)
 	if err != nil {
 		panic(err)
 	}
+
 	prometheus.MustRegister(exporter)
 
 	http.Handle(*metricsPath, promhttp.Handler())
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`
-			<html>
-			<head><title>Libvirt Exporter</title></head>
-			<body>
-			<h1>Libvirt Exporter</h1>
-			<p><a href='` + *metricsPath + `'>Metrics</a></p>
-			</body>
-			</html>`))
-	})
-	log.Fatal(http.ListenAndServe(*listenAddress, nil))
+	if *metricsPath != "/" {
+		landingCnf := web.LandingConfig{
+			Name:        "Libvirt Exporter",
+			Description: "Prometheus Libvirt Exporter",
+			Version:     version.Info(),
+			Links: []web.LandingLinks{
+				{
+					Address: *metricsPath,
+					Text:    "Metrics",
+				},
+			},
+		}
+		landingPage, err := web.NewLandingPage(landingCnf)
+		if err != nil {
+			_ = level.Error(logger).Log("err", err)
+			os.Exit(1)
+		}
+		http.Handle("/", landingPage)
+	}
+
+	srv := &http.Server{}
+	if err = web.ListenAndServe(srv, toolkitFlags, logger); err != nil {
+		_ = level.Error(logger).Log("err", err)
+		os.Exit(1)
+	}
 }
