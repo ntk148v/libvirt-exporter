@@ -1,27 +1,16 @@
-FROM golang:1.17.3-alpine3.15 AS build
+FROM golang:1.22-alpine as builder
+# Requirements/Dependencies
+RUN apk add ca-certificates g++ git libvirt-dev libvirt
+# Build
+COPY .  $GOPATH/src/libvirt-exporter
+WORKDIR $GOPATH/src/libvirt-exporter
+RUN git config --global --add safe.directory /app &&\
+    go build -ldflags="-s -w" -o /bin/libvirt-exporter .
 
-ARG VERSION
-ENV VERSION=${VERSION:-development}
-
-ENV LIBVIRT_EXPORTER_PATH=/libvirt-exporter
-ENV LIBXML2_VER=2.9.12
-
-RUN apk add ca-certificates g++ git libnl-dev linux-headers make libvirt-dev libvirt && \
-    wget ftp://xmlsoft.org/libxml2/libxml2-${LIBXML2_VER}.tar.gz -P /tmp && \
-    tar -xf /tmp/libxml2-${LIBXML2_VER}.tar.gz -C /tmp/ && \
-    cd /tmp/libxml2-${LIBXML2_VER} && \
-    ./configure && \
-    make -j$(nproc) && \
-    make install && \
-    mkdir -p $LIBVIRT_EXPORTER_PATH
-WORKDIR $LIBVIRT_EXPORTER_PATH
-COPY . .
-
-RUN go build -ldflags="-X 'main.Version=${VERSION}'" -mod vendor
-
-FROM alpine:3.15
-RUN apk add ca-certificates libvirt
-COPY --from=build $LIBVIRT_EXPORTER_PATH/libvirt-exporter /
+FROM scratch
+COPY --from=builder /bin/libvirt-exporter /bin/libvirt-exporter
+USER nobody:nobody
+# Default listen on port 9177
 EXPOSE 9177
-
-ENTRYPOINT [ "/libvirt-exporter" ]
+# Start
+CMD ["/bin/libvirt-exporter"]
