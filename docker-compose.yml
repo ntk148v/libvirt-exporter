@@ -1,0 +1,13 @@
+services:
+  prometheus_libvirt_exporter:
+    container_name: prometheus-libvirt-exporter
+    image: kiennt26/prometheus-libvirt-exporter
+    build: .
+    command:
+      - "--path.procfs=/host/proc"
+    network_mode: host
+    pid: host
+    restart: unless-stopped
+    volumes:
+      - "/:/host:ro,rslave"
+      - "/var/run/libvirt:/var/run/libvirt"

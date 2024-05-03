@@ -6,6 +6,7 @@ Docker image is available at [dockerhub](https://hub.docker.com/r/alekseizakharo
  - `build-with` - builds dynamically linked libvirt-exporter in the container based on Dockerfile specified as an argument. Ex.: `build-with ./build_container/Dockerfile.ubuntu2004` will build libvirt-exporter for Ubuntu 20.04.
 
 # Metrics
+
 The following metrics/labels are being exported:
 
 ```
@@ -82,12 +83,14 @@ libvirt_up 1
 ```
 
 ## Libvirt/qemu version notice
+
 Some of the above might be exposed only with:
 
 `libvirt >= v7.2.0`:
 libvirt_domain_vcpu_delay_seconds_total
 
 # Historical
+
 Project forked from https://github.com/kumina/libvirt_exporter and substantially rewritten.
 Implemented support for several additional metrics, ceph rbd (and network block devices), ovs.
 Implemented statistics collection using GetAllDomainStats
