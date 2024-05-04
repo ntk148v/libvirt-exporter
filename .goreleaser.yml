@@ -7,7 +7,7 @@ before:
 builds:
   - id: prometheus-libvirt-exporter
     dir: .
-    main: ./libvirt_expor.go
+    main: ./libvirt_exporter.go
     binary: prometheus-libvirt-exporter
     flags:
       - -tags=netgo
