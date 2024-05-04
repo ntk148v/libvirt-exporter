@@ -34,6 +34,11 @@ jobs:
         with:
           go-version: 1.22.x
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvirt-dev libvirt0 git g++
+
       - name: Run Goreleaser
         if: ${{ github.event_name != 'pull_request' }}
         env:
