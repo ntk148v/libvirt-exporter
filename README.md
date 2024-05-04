@@ -9,7 +9,6 @@ Table of content:
     - [2.1. Binary](#21-binary)
     - [2.2. Docker](#22-docker)
   - [3. Sample metrics](#3-sample-metrics)
-  - [Libvirt/qemu version notice](#libvirtqemu-version-notice)
 
 ## 0. Introduction
 
@@ -175,10 +174,3 @@ libvirt_domain_vcpu_wait_seconds_total{domain="instance-00000337",vcpu="0"} 0
 
 libvirt_up 1
 ```
-
-## Libvirt/qemu version notice
-
-Some of the above might be exposed only with:
-
-`libvirt >= v7.2.0`:
-libvirt_domain_vcpu_delay_seconds_total
