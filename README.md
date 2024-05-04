@@ -1,11 +1,105 @@
-# Prometheus libvirt exporter
+# Prometheus Libvirt Exporter
 
-Docker image is available at [dockerhub](https://hub.docker.com/r/alekseizakharov/libvirt-exporter).
+Table of content:
 
- - `Dockerfile` - creates a docker container with dynamically linked libvirt-exporter. Make an image and run with `docker container run -p9177:9177 -v /var/run/libvirt:/var/run/libvirt yourcontainername`. Based on the latest golang:alpine.
- - `build-with` - builds dynamically linked libvirt-exporter in the container based on Dockerfile specified as an argument. Ex.: `build-with ./build_container/Dockerfile.ubuntu2004` will build libvirt-exporter for Ubuntu 20.04.
+- [Prometheus Libvirt Exporter](#prometheus-libvirt-exporter)
+  - [0. Introduction](#0-introduction)
+  - [1. Historical and Improvement](#1-historical-and-improvement)
+  - [2. Installation and Usage](#2-installation-and-usage)
+    - [2.1. Binary](#21-binary)
+    - [2.2. Docker](#22-docker)
+  - [3. Sample metrics](#3-sample-metrics)
+  - [Libvirt/qemu version notice](#libvirtqemu-version-notice)
 
-# Metrics
+## 0. Introduction
+
+This repository provides code for a Prometheus metrics exporter
+for [libvirt](https://libvirt.org/). This exporter connects to any
+libvirt daemon and exports per-domain metrics related to CPU, memory,
+disk and network usage. By default, this exporter listens on TCP port 9177.
+
+This exporter makes use of
+[libvirt-go](https://gitlab.com/libvirt/libvirt-go-module), the official Go
+bindings for libvirt. This exporter make use of the
+`GetAllDomainStats()`.
+
+## 1. Historical and Improvement
+
+Project forked from <https://github.com/Tinkoff/libvirt-exporter> as it was archived and rewritten.
+
+**Q**: Why don't just use <https://github.com/inovex/prometheus-libvirt-exporter>? It is active and maintained.
+
+**A**: There are two main reasons:
+
+- The [inovex/prometheus-libvirt-exporter](https://github.com/inovex/prometheus-libvirt-exporter) is not _compatible_ with old exporters, its metrics are different. I would like stick to old exporters in order to avoid modifying existing monitoring/alerting/presenting logic. And I know [I'm not the only one](https://github.com/inovex/prometheus-libvirt-exporter/issues/22).
+- My system uses the Libvirt 6.0.0 and it doesn't support to [expose CPU steal metric](https://github.com/Tinkoff/libvirt-exporter?tab=readme-ov-file#libvirtqemu-version-notice). Therefore, the [inovex/prometheus-libvirt-exporter](https://github.com/inovex/prometheus-libvirt-exporter) doesn't solve my problem.
+
+**Q**: So what's new?
+
+**A**:
+
+- ~~Some of the above might be exposed only with: `libvirt >= v7.2.0`: libvirt_domain_vcpu_delay_seconds_total~~ This libvirt-exporter calculates the CPU steal itself if the Libvirt doesn't expose the metrics.
+- Up-to-date dependencies, also add logging and new Prometheus exporter web UI.
+
+## 2. Installation and Usage
+
+### 2.1. Binary
+
+- You can use Golang install command to install libvirt-exporter:
+
+```shell
+$ go install github.com/ntk148v/libvirt-exporter@latest
+# Run the binary
+$ ~/go/bin/libvirt-exporter
+```
+
+- Or you can download the binary directly from [release page](https://github.com/ntk148v/libvirt-exporter/releases).
+- Usage:
+
+```shell
+usage: libvirt-exporter [<flags>]
+
+
+Flags:
+  -h, --[no-]help                Show context-sensitive help (also try --help-long and --help-man).
+      --path.procfs="/proc"      procfs mountpoint.
+      --libvirt.uri="qemu:///system"
+                                 Libvirt URI to extract metrics, available value: qemu:///system (default), qemu:///session, xen:///system and test:///default
+      --web.telemetry-path="/metrics"
+                                 Path under which to expose metrics
+      --[no-]web.systemd-socket  Use systemd socket activation listeners instead of port listeners (Linux only).
+      --web.listen-address=:9177 ...
+                                 Addresses on which to expose metrics and web interface. Repeatable for multiple addresses.
+      --web.config.file=""       Path to configuration file that can enable TLS or authentication. See: https://github.com/prometheus/exporter-toolkit/blob/master/docs/web-configuration.md
+      --log.level=info           Only log messages with the given severity or above. One of: [debug, info, warn, error]
+      --log.format=logfmt        Output format of log messages. One of: [logfmt, json]
+      --[no-]version             Show application version.
+```
+
+### 2.2. Docker
+
+The `libvirt-exporter` is designed to monitor the libvirt system by using Libvirt URI `/var/run/libvirt` and `/proc` (if Libvirt version < 7.2.0). Deploying in containers requires extra work to make it work properly.
+
+If you start container for host monitoring, specify `path.procfs` argument. This argument must match path in bind-mount of host procfs (`/proc`). The `libvirt-exporter` will use `path.procfs` as prefix to access host filesystem. Another bind mount `/var/run/libvirt` is also required.
+
+For Docker compose, use the [sample compose file](./docker-compose.yml):
+
+```yaml
+services:
+  prometheus_libvirt_exporter:
+    container_name: prometheus-libvirt-exporter
+    image: kiennt26/prometheus-libvirt-exporter
+    command:
+      - "--path.procfs=/host/proc"
+    network_mode: host
+    pid: host
+    restart: unless-stopped
+    volumes:
+      - "/:/host:ro,rslave"
+      - "/var/run/libvirt:/var/run/libvirt"
+```
+
+## 3. Sample metrics
 
 The following metrics/labels are being exported:
 
@@ -88,24 +182,3 @@ Some of the above might be exposed only with:
 
 `libvirt >= v7.2.0`:
 libvirt_domain_vcpu_delay_seconds_total
-
-# Historical
-
-Project forked from https://github.com/kumina/libvirt_exporter and substantially rewritten.
-Implemented support for several additional metrics, ceph rbd (and network block devices), ovs.
-Implemented statistics collection using GetAllDomainStats
-
-And then forked again from https://github.com/rumanzo/libvirt_exporter_improved and rewritten.
-Implemented meta metrics and more info about disks, interfaces and domain.
-
-This repository provides code for a Prometheus metrics exporter
-for [libvirt](https://libvirt.org/). This exporter connects to any
-libvirt daemon and exports per-domain metrics related to CPU, memory,
-disk and network usage. By default, this exporter listens on TCP port
-9177.
-
-This exporter makes use of
-[libvirt-go](https://gitlab.com/libvirt/libvirt-go-module), the official Go
-bindings for libvirt. This exporter make use of the
-`GetAllDomainStats()`
-
