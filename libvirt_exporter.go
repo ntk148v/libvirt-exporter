@@ -464,7 +464,10 @@ func CollectDomain(ch chan<- prometheus.Metric, stat libvirt.DomainStats, logger
 	domainPid := GetDomainPid(domainName)
 	domainVcpuPids, err := GetDomainVcpuPids(stat.Domain)
 	if err != nil {
-		return err
+		lverr, ok := err.(libvirt.Error)
+		if !ok || lverr.Code != libvirt.ERR_OPERATION_INVALID {
+			return err
+		}
 	}
 
 	domainUUID, err := stat.Domain.GetUUIDString()
