@@ -583,6 +583,16 @@ func CollectDomain(ch chan<- prometheus.Metric, stat libvirt.DomainStats, logger
 					domainName,
 					strconv.FormatInt(int64(cpuNum), 10))
 			} else {
+				// stat.Vcpu == VcpuMaximum  [1]
+				// But sometimes, the virtual machine doesn't use all maximum vcpu.
+				// For example:
+				// 		vcpu.current = 4
+				//      vcpu.maximum = 48
+				// [1] https://github.com/libvirt/libvirt-go/blob/master/connect.go#L3179
+				if len(domainVcpuPids) <= cpuNum {
+					continue
+				}
+
 				// If there are no vcpu delay measurement, we calculate it ourselves.
 				vcpuPid := domainVcpuPids[cpuNum]
 				procFSSchedStat, err := utils.GetProcPIDSchedStat(filepath.Join(*procFSPath, strconv.Itoa(domainPid), "task"), vcpuPid)
